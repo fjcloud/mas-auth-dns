@@ -1,30 +1,23 @@
 # MAS auth to the in-cluster router
 
-Manage calls the public auth route. On an internal load balancer that preserves the client IP, the call hangs when Manage and a router are on the same node.
-
-Pods keep the public name. This Deployment answers it with the router Service address. CoreDNS only forwards that one name.
-
 ```bash
 export ROUTER=$(oc get svc router-default -n openshift-ingress -o jsonpath='{.spec.clusterIP}')
 export AUTH=$(oc get route -A -o jsonpath='{range .items[?(@.spec.to.name=="coreidp")]}{.spec.host}{"\n"}{end}' | head -n1)
-export MINOR=$(oc get clusterversion version -o jsonpath='{.status.desired.version}' | cut -d. -f1,2)
-echo "$ROUTER  $AUTH  v$MINOR"
 ```
 
 ```bash
-oc new-app -f https://raw.githubusercontent.com/fjcloud/mas-auth-dns/main/template.yaml \
-  -p AUTH_HOST="$AUTH" \
-  -p ROUTER_IP="$ROUTER" \
-  -p IMAGE="registry.redhat.io/openshift4/ose-coredns-rhel9:v${MINOR}"
+oc new-app https://github.com/fjcloud/mas-auth-dns --env MASHOST="$AUTH" --env ROUTER_IP="$ROUTER"
 ```
 
 ```bash
-IP=$(oc get svc auth-dns -n auth-dns -o jsonpath='{.spec.clusterIP}')
+IP=$(oc get svc mas-auth-dns -o jsonpath='{.spec.clusterIP}')
 oc patch dns.operator default --type=merge -p '{"spec":{"servers":[{"name":"mas-auth","zones":["'"$AUTH"'"],"forwardPlugin":{"policy":"Sequential","upstreams":["'"$IP:5353"'"]}}]}}'
 oc delete pod -n openshift-dns -l dns.operator.openshift.io/daemonset-dns=default
 ```
 
-`AUTH_HOST` and `ROUTER_IP` are the container environment. The image tag is `v` plus the cluster minor, from `registry.redhat.io`.
+`new-app` builds `registry.redhat.io/openshift4/ose-coredns-rhel9:v4.22` and sets `MASHOST` and `ROUTER_IP` on the deployment. The Service `mas-auth-dns` is created in the current project, on port 5353 TCP and UDP.
+
+The last command tells cluster DNS to forward only that auth name to the Service, then restarts CoreDNS so it loads the change.
 
 Check:
 
@@ -41,5 +34,5 @@ Remove:
 ```bash
 oc patch dns.operator default --type=json -p '[{"op":"remove","path":"/spec/servers"}]'
 oc delete pod -n openshift-dns -l dns.operator.openshift.io/daemonset-dns=default
-oc delete namespace auth-dns
+oc delete all -l app=mas-auth-dns
 ```
