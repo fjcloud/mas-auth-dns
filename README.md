@@ -30,7 +30,7 @@ oc new-app https://github.com/fjcloud/mas-auth-dns \
   --env ROUTER_IP="$ROUTER"
 ```
 
-## Forward the auth name
+## Forward the auth name. If the resolver pod does not answer, CoreDNS uses the cluster nameserver.
 
 ```bash
 IP=$(
