@@ -8,7 +8,7 @@ Create the project and switch to it.
 oc new-project auth-dns
 ```
 
-Read the router Service address and the auth route hostname.
+Read the router Service address and the auth route hostname, then print both.
 
 ```bash
 export ROUTER=$(
@@ -20,6 +20,8 @@ export AUTH=$(
     -o jsonpath='{range .items[?(@.spec.to.name=="coreidp")]}{.spec.host}{"\n"}{end}' \
     | head -n1
 )
+echo "route hostname: $AUTH"
+echo "router ip: $ROUTER"
 ```
 
 Build the resolver in this project. `MASHOST` and `ROUTER_IP` are the container environment.
