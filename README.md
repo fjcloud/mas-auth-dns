@@ -2,9 +2,13 @@
 
 Manage calls the public auth hostname. These commands make pods resolve that name to the router Service, so the call does not go through the ingress load balancer.
 
+Create the project and switch to it.
+
 ```bash
 oc new-project auth-dns
 ```
+
+Read the router Service address and the auth route hostname.
 
 ```bash
 export ROUTER=$(
@@ -18,11 +22,15 @@ export AUTH=$(
 )
 ```
 
+Build the resolver in this project. `MASHOST` and `ROUTER_IP` are the container environment.
+
 ```bash
 oc new-app https://github.com/fjcloud/mas-auth-dns \
   --env MASHOST="$AUTH" \
   --env ROUTER_IP="$ROUTER"
 ```
+
+Forward only the auth name to Service `mas-auth-dns` port 5353.
 
 ```bash
 IP=$(
@@ -44,18 +52,33 @@ oc patch dns.operator default --type=merge -p "$(cat <<EOF
 }
 EOF
 )"
+```
+
+Restart CoreDNS. The operator writes the Corefile but does not reload the running pods.
+
+```bash
 oc delete pod -n openshift-dns \
   -l dns.operator.openshift.io/daemonset-dns=default
 ```
 
-`new-app` creates Service `mas-auth-dns` in project `auth-dns`, on port 5353. The patch forwards only the auth name. CoreDNS does not load that change until its pods are deleted.
-
 Remove:
+
+Drop the auth forward from cluster DNS.
 
 ```bash
 oc patch dns.operator default --type=json -p \
   '[{"op":"remove","path":"/spec/servers"}]'
+```
+
+Restart CoreDNS so it stops using the forward.
+
+```bash
 oc delete pod -n openshift-dns \
   -l dns.operator.openshift.io/daemonset-dns=default
+```
+
+Delete the project.
+
+```bash
 oc delete project auth-dns
 ```
