@@ -37,6 +37,14 @@ IP=$(
   oc get svc mas-auth-dns -n auth-dns \
     -o jsonpath='{.spec.clusterIP}'
 )
+NS=$(
+  POD=$(oc get pod -n openshift-dns \
+    -l dns.operator.openshift.io/daemonset-dns=default \
+    -o jsonpath='{.items[0].metadata.name}')
+  oc exec -n openshift-dns "$POD" -c dns -- \
+    awk '/^nameserver / {print $2":53"; exit}' /etc/resolv.conf
+)
+echo "fallback: $NS"
 oc patch dns.operator default --type=merge -p "$(cat <<EOF
 {
   "spec": {
@@ -45,7 +53,7 @@ oc patch dns.operator default --type=merge -p "$(cat <<EOF
       "zones": ["${AUTH}"],
       "forwardPlugin": {
         "policy": "Sequential",
-        "upstreams": ["${IP}:5353"]
+        "upstreams": ["${IP}:5353", "${NS}"]
       }
     }]
   }
